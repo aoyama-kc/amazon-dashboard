@@ -1,0 +1,244 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Amazon Sales Verified Dashboard</title>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-datalabels@2"></script>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        body { background-color: #000000; color: #e2e8f0; font-family: 'Segoe UI', sans-serif; }
+        .card { background-color: #0a0a0a; border: 1px solid #222; border-radius: 12px; padding: 1.5rem; }
+        .table-container { background-color: #0a0a0a; border-radius: 12px; border: 1px solid #222; overflow: hidden; }
+        thead { background-color: #1a1a1a; }
+        th { color: #71717a; font-size: 0.75rem; text-transform: uppercase; padding: 12px 16px; border-bottom: 1px solid #333; }
+        td { padding: 12px 16px; border-bottom: 1px solid #1a1a1a; font-size: 0.85rem; }
+        ::-webkit-scrollbar { width: 8px; height: 8px;}
+        ::-webkit-scrollbar-thumb { background: #333; border-radius: 10px; }
+        ::-webkit-scrollbar-track { background: #000; }
+    </style>
+</head>
+<body class="p-4 md:p-8">
+
+    <div class="mb-10 border-b border-zinc-800 pb-6">
+        <h1 class="text-3xl font-bold text-white tracking-tight">Amazon 統合売上管理ダッシュボード</h1>
+        <p class="text-zinc-500 font-mono mt-1">期間: 2024/04 - 2026/04 | CSVデータ完全同期版</p>
+    </div>
+
+    <div class="mb-10">
+        <h2 class="text-lg font-medium mb-4 flex items-center">
+            <span class="w-1 h-5 bg-blue-600 mr-3"></span>月別売上推移 & 転換率（2軸表示）
+        </h2>
+        <div class="card overflow-x-auto">
+            <div style="min-width: 1500px; height: 400px;">
+                <canvas id="mainChart"></canvas>
+            </div>
+        </div>
+    </div>
+
+    <div class="mb-16">
+        <h2 class="text-lg font-medium mb-4 flex items-center text-zinc-400">
+            <span class="w-1 h-5 bg-zinc-600 mr-3"></span>月次統計テーブル（全25ヶ月）
+        </h2>
+        <div class="table-container overflow-x-auto">
+            <table class="w-full text-left whitespace-nowrap">
+                <thead>
+                    <tr>
+                        <th class="p-4">年月</th>
+                        <th class="text-right">売上額</th>
+                        <th class="text-right">PV数 (合計)</th>
+                        <th class="text-right">セッション数</th>
+                        <th class="text-right">注文された商品点数</th>
+                        <th class="text-right">ユニットセッション率</th>
+                    </tr>
+                </thead>
+                <tbody id="monthlyBody"></tbody>
+            </table>
+        </div>
+    </div>
+
+    <div class="mb-10">
+        <h2 class="text-lg font-medium mb-4 flex items-center">
+            <span class="w-1 h-5 bg-purple-600 mr-3"></span>商品別詳細データ (2026/03)
+        </h2>
+        
+        <div class="card mb-6 flex justify-center items-center">
+            <div style="width: 100%; max-width: 500px; height: 320px;">
+                <canvas id="pieChart"></canvas>
+            </div>
+        </div>
+
+        <div class="table-container overflow-x-auto">
+            <table class="w-full text-left">
+                <thead>
+                    <tr>
+                        <th class="p-4">タイトル / ASIN</th>
+                        <th class="text-right">売上額</th>
+                        <th class="text-right">注文された商品点数</th>
+                        <th class="text-right">PV数</th>
+                        <th class="text-right">セッション</th>
+                        <th class="text-right">ユニットセッション率</th>
+                    </tr>
+                </thead>
+                <tbody id="asinBody"></tbody>
+            </table>
+        </div>
+    </div>
+
+    <script>
+        // CSVから直接抽出した月別データ（全25行）
+        const rawMonthly = [{"日付": "2026/04", "注文商品の売上額": "￥217,802", "ページビュー - 合計": "409", "セッション数 - 合計": "324", "注文された商品点数": 86, "ユニットセッション率": "26.54%"}, {"日付": "2026/03", "注文商品の売上額": "￥1,791,279", "ページビュー - 合計": "4,093", "セッション数 - 合計": "2,981", "注文された商品点数": 651, "ユニットセッション率": "21.84%"}, {"日付": "2026/02", "注文商品の売上額": "￥1,428,260", "ページビュー - 合計": "3,570", "セッション数 - 合計": "2,661", "注文された商品点数": 482, "ユニットセッション率": "18.11%"}, {"日付": "2026/01", "注文商品の売上額": "￥1,586,657", "ページビュー - 合計": "4,735", "セッション数 - 合計": "3,551", "注文された商品点数": 536, "ユニットセッション率": "15.09%"}, {"日付": "2025/12", "注文商品の売上額": "￥1,881,163", "ページビュー - 合計": "5,144", "セッション数 - 合計": "3,721", "注文された商品点数": 640, "ユニットセッション率": "17.20%"}, {"日付": "2025/11", "注文商品の売上額": "￥1,514,486", "ページビュー - 合計": "4,146", "セッション数 - 合計": "3,140", "注文された商品点数": 516, "ユニットセッション率": "16.43%"}, {"日付": "2025/10", "注文商品の売上額": "￥1,156,995", "ページビュー - 合計": "3,023", "セッション数 - 合計": "2,267", "注文された商品点数": 392, "ユニットセッション率": "17.29%"}, {"日付": "2025/09", "注文商品の売上額": "￥1,133,210", "ページビュー - 合計": "3,059", "セッション数 - 合計": "2,261", "注文された商品点数": 373, "ユニットセッション率": "16.50%"}, {"日付": "2025/08", "注文商品の売上額": "￥1,194,660", "ページビュー - 合計": "3,440", "セッション数 - 合計": "2,456", "注文された商品点数": 397, "ユニットセッション率": "16.16%"}, {"日付": "2025/07", "注文商品の売上額": "￥1,236,635", "ページビュー - 合計": "3,529", "セッション数 - 合計": "2,551", "注文された商品点数": 434, "ユニットセッション率": "17.01%"}, {"日付": "2025/06", "注文商品の売上額": "￥1,279,621", "ページビュー - 合計": "3,544", "セッション数 - 合計": "2,582", "注文された商品点数": 448, "ユニットセッション率": "17.35%"}, {"日付": "2025/05", "注文商品の売上額": "￥1,150,096", "ページビュー - 合計": "3,815", "セッション数 - 合計": "2,794", "注文された商品点数": 374, "ユニットセッション率": "13.39%"}, {"日付": "2025/04", "注文商品の売上額": "￥1,244,656", "ページビュー - 合計": "3,616", "セッション数 - 合計": "2,653", "注文された商品点数": 376, "ユニットセッション率": "14.17%"}, {"日付": "2025/03", "注文商品の売上額": "￥928,946", "ページビュー - 合計": "3,088", "セッション数 - 合計": "2,292", "注文された商品点数": 298, "ユニットセッション率": "13.00%"}, {"日付": "2025/02", "注文商品の売上額": "￥1,213,694", "ページビュー - 合計": "4,295", "セッション数 - 合計": "3,109", "注文された商品点数": 413, "ユニットセッション率": "13.28%"}, {"日付": "2025/01", "注文商品の売上額": "￥1,216,716", "ページビュー - 合計": "4,346", "セッション数 - 合計": "3,220", "注文された商品点数": 436, "ユニットセッション率": "13.54%"}, {"日付": "2024/12", "注文商品の売上額": "￥1,489,362", "ページビュー - 合計": "5,595", "セッション数 - 合計": "4,049", "注文された商品点数": 539, "ユニットセッション率": "13.31%"}, {"日付": "2024/11", "注文商品の売上額": "￥1,028,646", "ページビュー - 合計": "3,855", "セッション数 - 合計": "2,819", "注文された商品点数": 372, "ユニットセッション率": "13.20%"}, {"日付": "2024/10", "注文商品の売上額": "￥892,912", "ページビュー - 合計": "2,551", "セッション数 - 合計": "1,936", "注文された商品点数": 339, "ユニットセッション率": "17.51%"}, {"日付": "2024/09", "注文商品の売上額": "￥1,035,700", "ページビュー - 合計": "2,685", "セッション数 - 合計": "1,975", "注文された商品点数": 375, "ユニットセッション率": "18.99%"}, {"日付": "2024/08", "注文商品の売上額": "￥1,072,804", "ページビュー - 合計": "2,945", "セッション数 - 合計": "2,111", "注文された商品点数": 405, "ユニットセッション率": "19.19%"}, {"日付": "2024/07", "注文商品の売上額": "￥938,476", "ページビュー - 合計": "3,100", "セッション数 - 合計": "2,232", "注文された商品点数": 361, "ユニットセッション率": "16.17%"}, {"日付": "2024/06", "注文商品の売上額": "￥942,052", "ページビュー - 合計": "2,501", "セッション数 - 合計": "1,792", "注文された商品点数": 285, "ユニットセッション率": "15.90%"}, {"日付": "2024/05", "注文商品の売上額": "￥1,039,534", "ページビュー - 合計": "3,626", "セッション数 - 合計": "2,539", "注文された商品点数": 399, "ユニットセッション率": "15.71%"}, {"日付": "2024/04", "注文商品の売上額": "￥804,010", "ページビュー - 合計": "2,553", "セッション数 - 合計": "1,836", "注文された商品点数": 300, "ユニットセッション率": "16.34%"}];
+
+        // CSVから直接抽出したASIN別データ（全8商品）
+        const rawAsin = [{"（子）ASIN": "B0858XZQ9D", "タイトル": "有明漁師海苔 上級 焼き海苔 30枚入 有明海苔 国産 長期保存", "注文商品の売上額": "￥1,223,712", "注文された商品点数": 510, "ページビュー - 合計": "2,977", "セッション数 - 合計": "2,128", "ユニットセッション率": "23.97%"}, {"（子）ASIN": "B08575N4NM", "タイトル": "有明漁師海苔 最高級 焼き海苔 30枚入 有明海苔 国産 長期保存", "注文商品の売上額": "￥233,805", "注文された商品点数": 60, "ページビュー - 合計": "423", "セッション数 - 合計": "313", "ユニットセッション率": "19.17%"}, {"（子）ASIN": "B085926ZST", "タイトル": "有明漁師海苔 高級 焼き海苔 30枚入 有明海苔 国産 長期保存", "注文商品の売上額": "￥140,265", "注文された商品点数": 52, "ページビュー - 合計": "291", "セッション数 - 合計": "208", "ユニットセッション率": "25.00%"}, {"（子）ASIN": "B086DVV7P6", "タイトル": "有明漁師海苔 上級 焼き海苔 100枚入 有明海苔 国産 長期保存", "注文商品の売上額": "￥127,800", "注文された商品点数": 18, "ページビュー - 合計": "87", "セッション数 - 合計": "72", "ユニットセッション率": "25.00%"}, {"（子）ASIN": "B0861S8NXQ", "タイトル": "有明漁師海苔 軍艦巻用焼き海苔 700枚入 ( 全型 100枚 ) 【国産】", "注文商品の売上額": "￥50,575", "注文された商品点数": 6, "ページビュー - 合計": "289", "セッション数 - 合計": "239", "ユニットセッション率": "2.51%"}, {"（子）ASIN": "B096WPDHGL", "タイトル": "有明漁師海苔 焼きバラ干し海苔 10g 【5袋セット】 有明海苔 国産", "注文商品の売上額": "￥13,722", "注文された商品点数": 5, "ページビュー - 合計": "25", "セッション数 - 合計": "20", "ユニットセッション率": "25.00%"}, {"（子）ASIN": "B086DT4CSM", "タイトル": "有明漁師海苔 上級 焼き海苔 50枚入 有明海苔 国産 長期保存", "注文商品の売上額": "￥3,800", "注文された商品点数": 1, "ページビュー - 合計": "0", "セッション数 - 合計": "0", "ユニットセッション率": "0.00%"}, {"（子）ASIN": "B09TJYD32W", "タイトル": "有明漁師海苔 上級焼き海苔", "注文商品の売上額": "￥0", "注文された商品点数": 0, "ページビュー - 合計": "1", "セッション数 - 合計": "1", "ユニットセッション率": "0.00%"}];
+
+        // --- テーブル生成 ---
+        const mBody = document.getElementById('monthlyBody');
+        rawMonthly.forEach(d => {
+            mBody.innerHTML += `<tr>
+                <td class="font-mono text-zinc-400">${d["日付"]}</td>
+                <td class="text-right text-blue-400 font-bold">${d["注文商品の売上額"]}</td>
+                <td class="text-right text-purple-400">${d["ページビュー - 合計"]}</td>
+                <td class="text-right">${d["セッション数 - 合計"]}</td>
+                <td class="text-right">${d["注文された商品点数"]}</td>
+                <td class="text-right text-green-500 font-bold">${d["ユニットセッション率"]}</td>
+            </tr>`;
+        });
+
+        const aBody = document.getElementById('asinBody');
+        rawAsin.forEach(d => {
+            aBody.innerHTML += `<tr>
+                <td class="p-4 border-b border-zinc-900">
+                    <div class="text-zinc-200 text-sm font-medium">${d["タイトル"]}</div>
+                    <div class="text-[10px] text-zinc-600 font-mono">${d["（子）ASIN"]}</div>
+                </td>
+                <td class="text-right font-bold text-white">${d["注文商品の売上額"]}</td>
+                <td class="text-right text-white">${d["注文された商品点数"]}</td>
+                <td class="text-right text-purple-400">${d["ページビュー - 合計"]}</td>
+                <td class="text-right">${d["セッション数 - 合計"]}</td>
+                <td class="text-right text-blue-400 font-bold">${d["ユニットセッション率"]}</td>
+            </tr>`;
+        });
+
+        // --- 1. メイングラフ生成（2軸：売上＋転換率） ---
+        const ctxMain = document.getElementById('mainChart').getContext('2d');
+        const monthlyDataSorted = [...rawMonthly].reverse(); // 過去から現在へ
+        const labels = monthlyDataSorted.map(d => d["日付"]);
+        
+        const salesData = monthlyDataSorted.map(d => parseFloat(d["注文商品の売上額"].replace('￥', '').replace(/,/g, '')));
+        const cvrData = monthlyDataSorted.map(d => parseFloat(d["ユニットセッション率"].replace('%', '')));
+
+        new Chart(ctxMain, {
+            type: 'line',
+            data: {
+                labels: labels,
+                datasets: [
+                    {
+                        label: '売上金額 (￥)',
+                        data: salesData,
+                        borderColor: '#3b82f6',
+                        backgroundColor: 'rgba(59, 130, 246, 0.1)',
+                        pointRadius: 6,
+                        pointBackgroundColor: '#3b82f6',
+                        fill: true,
+                        yAxisID: 'ySales',
+                        datalabels: { display: true } // 売上だけ数値を直書き
+                    },
+                    {
+                        label: '転換率 (ユニットセッション率 %)',
+                        data: cvrData,
+                        borderColor: '#10b981', // 緑色
+                        backgroundColor: 'transparent',
+                        pointRadius: 4,
+                        pointBackgroundColor: '#10b981',
+                        borderWidth: 2,
+                        yAxisID: 'yCvr',
+                        datalabels: { display: false } // こちらは重なるため直書き非表示
+                    }
+                ]
+            },
+            plugins: [ChartDataLabels],
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                scales: {
+                    x: { ticks: { color: '#71717a' }, grid: { display: false } },
+                    ySales: { 
+                        position: 'left', 
+                        ticks: { color: '#3b82f6', callback: (v) => '￥' + v.toLocaleString() }, 
+                        grid: { color: '#1a1a1a' } 
+                    },
+                    yCvr: {
+                        position: 'right',
+                        ticks: { color: '#10b981', callback: (v) => v + '%' },
+                        grid: { display: false } // グリッド線は左軸のものを共用
+                    }
+                },
+                plugins: {
+                    legend: { labels: { color: '#fff' }, position: 'top' },
+                    datalabels: {
+                        align: 'top',
+                        anchor: 'end',
+                        color: '#e2e8f0',
+                        offset: 5,
+                        font: { size: 9, family: 'monospace', weight: 'bold' },
+                        formatter: function(value) {
+                            return '￥' + Math.floor(value).toLocaleString();
+                        }
+                    }
+                }
+            }
+        });
+
+        // --- 2. 商品別円グラフ（売上の合計に対する内訳） ---
+        const ctxPie = document.getElementById('pieChart').getContext('2d');
+        
+        // 売上のある上位商品のみ抽出（￥0のものは除外）
+        const filteredAsin = rawAsin.filter(d => parseFloat(d["注文商品の売上額"].replace('￥', '').replace(/,/g, '')) > 0);
+        
+        const pieLabels = filteredAsin.map(d => d["タイトル"].substring(0, 10) + '..'); // 見やすくタイトルをトリム
+        const pieData = filteredAsin.map(d => parseFloat(d["注文商品の売上額"].replace('￥', '').replace(/,/g, '')));
+
+        new Chart(ctxPie, {
+            type: 'doughnut', // ドーナツ型の方が見栄えが良いので採用
+            data: {
+                labels: pieLabels,
+                datasets: [{
+                    data: pieData,
+                    backgroundColor: [
+                        '#3b82f6', // blue
+                        '#10b981', // green
+                        '#8b5cf6', // purple
+                        '#f59e0b', // orange
+                        '#ef4444', // red
+                        '#06b6d4'  // cyan
+                    ],
+                    borderWidth: 2,
+                    borderColor: '#0a0a0a'
+                }]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                plugins: {
+                    legend: {
+                        position: 'right',
+                        labels: { color: '#e2e8f0', font: { size: 11 } }
+                    },
+                    tooltip: {
+                        callbacks: {
+                            label: function(context) {
+                                const val = context.parsed;
+                                const total = context.dataset.data.reduce((a, b) => a + b, 0);
+                                const percentage = ((val / total) * 100).toFixed(1) + '%';
+                                return ` ￥${val.toLocaleString()} (${percentage})`;
+                            }
+                        }
+                    }
+                }
+            }
+        });
+    </script>
+</body>
+</html>
